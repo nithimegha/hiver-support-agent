@@ -1,46 +1,46 @@
 # Decision Log
 
-## 1. Selected AmazonHelp as the target brand
-AmazonHelp had high representation in the dataset, providing enough historical support interactions for training and retrieval.
+1. **Selected AmazonHelp**
+   - Chosen because it has a large volume of customer-support interactions in the dataset.
 
-## 2. Used direct customer-response pairs
-Only direct inbound customer tweets with an associated AmazonHelp response were used for the core support-pair dataset.
+2. **Used direct customer-response pairs**
+   - Provides a clear historical source of customer issues and AmazonHelp resolutions.
 
-## 3. Defined a compact intent taxonomy
-Eight support intents were created from recurring customer problems rather than using dozens of fine-grained labels.
+3. **Defined eight support intents**
+   - Keeps the routing problem small, understandable, and evaluable.
 
-## 4. Used TF-IDF + Logistic Regression as the primary intent baseline
-This provides a simple, fast and interpretable text-classification baseline.
+4. **Used a majority-class baseline**
+   - Provides a trivial reference point for measuring whether the classifier adds value.
 
-## 5. Included a majority-class baseline
-The majority classifier establishes the minimum performance level a useful classifier must beat.
+5. **Used TF-IDF + Logistic Regression**
+   - Chosen as a simple, fast, and reproducible classification approach.
 
-## 6. Used a held-out test split
-The training data was separated from evaluation data to avoid evaluating on examples used for fitting.
+6. **Used a held-out test split**
+   - Prevents evaluation only on examples used for training.
 
-## 7. Created a hand-labelled golden set
-A separate manually labelled set was created to provide a more realistic estimate than automatically derived labels.
+7. **Created an independent golden set**
+   - Tests whether model performance transfers to manually reviewed examples.
 
-## 8. Used sentence embeddings for retrieval
-Sentence-transformer embeddings allow semantically similar customer problems to be retrieved even when wording differs.
+8. **Used 152 golden examples**
+   - Meets the required 150–250 range while remaining practical to label manually.
 
-## 9. Used FAISS for retrieval
-FAISS provides fast nearest-neighbour search over the historical support cases.
+9. **Used sentence embeddings for retrieval**
+   - Captures semantic similarity between customer issues beyond keyword matching.
 
-## 10. Used historical responses as grounded drafts
-The system reuses a retrieved historical resolution instead of inventing unsupported policy, prices or timelines.
+10. **Used FAISS for retrieval**
+    - Provides efficient nearest-neighbour search over historical support cases.
 
-## 11. Added a similarity threshold for escalation
-Low retrieval similarity is treated as insufficient evidence and causes escalation instead of unsupported automation.
+11. **Grounded replies in historical resolutions**
+    - Reduces unsupported responses by using previous AmazonHelp resolutions as evidence.
 
-## 12. Escalated payment and account-access issues
-These intents can involve sensitive account or financial information, so the prototype routes them to human review.
+12. **Added a similarity threshold**
+    - Prevents weak historical matches from being treated as reliable evidence.
 
-## 13. Evaluated escalation as a policy
-The escalation tests verify that the implemented decision rules behave consistently; they are not presented as production-world escalation accuracy.
+13. **Escalated payment and account-access issues**
+    - These areas can involve sensitive or higher-risk support situations and therefore receive human review.
 
-## 14. Added LLM-based reply judging
-Reply quality is evaluated across correctness, groundedness, relevance, helpfulness and tone rather than using only text-overlap metrics.
+14. **Used an LLM-as-judge**
+    - Provides structured evaluation of correctness, groundedness, relevance, helpfulness, and tone.
 
-## 15. Kept the prototype reproducible
-The pipeline uses saved datasets, models and indexes so the headline experiments can be reproduced without manually rebuilding every intermediate artifact.
+15. **Compared LLM ratings with human ratings**
+    - Checks whether the automated judge is directionally aligned with human evaluation.
