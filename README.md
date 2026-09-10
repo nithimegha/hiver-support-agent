@@ -74,194 +74,259 @@ Predicted Intent      Historical Retrieval
                   AUTO-HANDLE     ESCALATE
                   ---
 
-## 5. Problem Framing: What Does "Good" Mean?
+---
 
-For AmazonHelp, a good support agent should do four things reliably:
+## 5. Problem Framing
 
-1. Correctly identify the customer's main support intent.
-2. Retrieve a relevant historical AmazonHelp resolution.
-3. Produce a response grounded in that historical evidence.
-4. Avoid unsafe automation by escalating uncertain or higher-risk cases.
+### What does "good" mean for AmazonHelp?
 
-The system therefore prioritizes **correct routing, grounded responses, and safe escalation** rather than maximizing the percentage of conversations automatically handled.
+A good support agent should be reliable in four areas:
 
-### What Was Not Built
+- **Intent accuracy:** correctly identify what the customer needs help with.
+- **Evidence quality:** retrieve a historical AmazonHelp case that is genuinely relevant.
+- **Response quality:** produce a helpful response supported by the retrieved evidence.
+- **Safe automation:** automatically handle low-risk, well-supported cases and escalate uncertain or sensitive cases to a human.
 
-This prototype does not attempt to build a production customer-support system.
+The prototype therefore prioritizes **trustworthy support decisions over maximum automation**.
 
-It does not include:
+### What I chose not to build
 
-- live Amazon order or account APIs;
-- customer authentication;
-- real-time Twitter/X integration;
-- automatic refunds, cancellations, or account changes;
-- production deployment infrastructure;
-- multilingual support;
-- model fine-tuning;
-- production monitoring or security infrastructure.
+This project focuses on the core support-agent decision pipeline rather than production infrastructure.
 
-The agent only classifies, retrieves evidence, drafts a response, and recommends AUTO-HANDLE or ESCALATE.
+The following were intentionally out of scope:
+
+- Live Amazon order and account APIs
+- Customer authentication
+- Real-time Twitter/X integration
+- Automatic refunds, cancellations, or account changes
+- Production deployment
+- Model fine-tuning
+- Multilingual support
+- Production monitoring and security infrastructure
+
+The system produces a recommendation and a grounded draft response; it does not execute customer-account actions.
 
 ---
 
-## 6. Results vs. Baselines
+## 6. Evaluation Results
 
-Two classification baselines were evaluated.
+I evaluated the intent classifier against both a trivial baseline and a simple machine-learning baseline.
 
 | Approach | Accuracy | Macro F1 |
 |---|---:|---:|
 | Majority-class baseline | 69.54% | 0.1025 |
 | TF-IDF + Logistic Regression | **93.15%** | **0.8711** |
 
-The majority baseline always predicts the most common intent, `order_delivery`.
+### What these results show
 
-The TF-IDF + Logistic Regression model substantially improves over this trivial baseline on the held-out dataset.
+The majority baseline always predicts the most frequent intent, `order_delivery`.
 
-However, the independently reviewed golden set gives a much lower result:
+The TF-IDF + Logistic Regression model performs substantially better than this trivial baseline on the held-out dataset.
 
-| Evaluation | Accuracy | Macro F1 |
+However, this is not sufficient evidence that the system is ready for reliable customer support.
+
+An independent golden evaluation set of 152 manually labelled examples produced:
+
+| Evaluation Set | Accuracy | Macro F1 |
 |---|---:|---:|
-| Golden set — 152 manually labelled examples | 17.76% | 0.1144 |
+| Golden set | 17.76% | 0.1144 |
 
-This gap is an important evaluation finding and is discussed below.
+The large difference between the held-out test result and the independently reviewed golden set became one of the main findings of this project.
 
 ---
 
 ## 7. Golden Evaluation Set
 
-A separate golden evaluation set containing **152 hand-labelled examples** was created.
+I created a separate golden evaluation set containing **152 manually labelled customer-support examples**.
 
-Examples were sampled from AmazonHelp customer-support interactions and manually assigned to one of the eight intents defined for this project.
+### Sampling and labelling approach
 
-The purpose was to evaluate the system against independently reviewed examples rather than relying only on automatically derived dataset labels.
+- Examples were taken from AmazonHelp customer-support interactions.
+- The examples were reviewed independently from the model's training predictions.
+- Each example was assigned one of the eight predefined support intents.
+- The set includes both clear requests and ambiguous support messages.
+- The purpose was to test whether the model's performance on dataset-derived labels would hold up under independent human review.
 
-The golden set covers the eight support categories and includes both straightforward and ambiguous customer requests.
-
-Manual review also revealed cases where the compact taxonomy was difficult to apply consistently. This indicates that label quality and taxonomy definition are themselves important sources of evaluation uncertainty.
+The manual review also exposed cases where some intent boundaries were difficult to apply consistently. This indicates that evaluation quality depends not only on the classifier but also on how clearly the support taxonomy is defined.
 
 ---
 
-## 8. Failure Analysis: Top 5 Failure Modes
+## 8. Failure Analysis
 
-### 1. Confusion between related support intents
+The evaluation highlighted five recurring failure patterns.
 
-Delivery, payment, account, and other support categories can overlap.
+### 1. Confusion between closely related intents
 
-**Example:** a customer may describe an order problem while also mentioning a payment or account issue.
+Some customer messages contain multiple signals, making the correct support category ambiguous.
 
-**Hypothesis:** the eight-intent taxonomy compresses naturally overlapping support problems.
+**Example:** a customer may describe an order problem while also mentioning a payment issue.
 
-### 2. Ambiguous short messages
+**Hypothesis:** the current eight-intent taxonomy combines support topics that can overlap in real conversations.
 
-Very short customer messages provide insufficient context.
+**Improvement:** introduce clearer intent definitions and use conversation context during classification.
 
-**Example:** messages such as "why did my order get declined?" can plausibly refer to an order problem or a payment problem.
+### 2. Very short or context-poor messages
 
-**Hypothesis:** using conversation context rather than a single tweet would improve classification.
+Short messages often do not contain enough information to determine the customer's actual problem.
 
-### 3. Historical retrieval mismatch
+**Example:** a message such as "Why was my order declined?" can potentially indicate either an order issue or a payment issue.
 
-Semantic similarity does not guarantee that the retrieved historical case represents the correct resolution.
+**Hypothesis:** classifying a single tweet loses useful information from earlier messages in the conversation.
 
-**Example:** a late-delivery message can retrieve another delivery-related case that has a different underlying cause.
+**Improvement:** classify using the full conversation thread where available.
 
-**Hypothesis:** retrieval should be conditioned on predicted intent and should consider multiple historical cases.
+### 3. Retrieval can find a similar but incorrect case
 
-### 4. Customer-specific details in historical responses
+Semantic similarity does not guarantee that the retrieved case represents the same underlying problem.
 
-The current prototype uses historical AmazonHelp responses as grounded drafts.
+**Example:** two customers may both mention late delivery while requiring different resolutions.
 
-A historical response can contain details specific to the original customer, order, or delivery situation.
+**Hypothesis:** retrieval based mainly on semantic similarity is not sufficient for precise support resolution.
 
-**Hypothesis:** retrieved responses should be treated as evidence, followed by generation of a fresh response that removes case-specific details.
+**Improvement:** combine intent filtering, similarity scoring, and multiple retrieved cases.
 
-### 5. Taxonomy and label inconsistency
+### 4. Historical responses may contain case-specific information
 
-Manual evaluation exposed examples where the predefined intent boundaries were difficult to apply consistently.
+The current prototype uses a historical AmazonHelp response as the grounded draft.
 
-This can make the model appear incorrect even when the underlying customer issue is reasonably interpreted.
+A historical response may refer to details that applied only to the original customer.
 
-**Hypothesis:** the taxonomy should be refined using explicit inclusion/exclusion rules and a second annotation/adjudication pass.
+**Example:** a response may mention a particular delivery time, order situation, or customer-specific action.
+
+**Hypothesis:** copying historical responses directly can introduce irrelevant details.
+
+**Improvement:** use historical responses as evidence and generate a new response that removes customer-specific information.
+
+### 5. Taxonomy and label ambiguity
+
+Manual review showed that some examples are difficult to assign consistently to a single intent.
+
+**Example:** some delivery-related messages contain payment, account, or order-management signals at the same time.
+
+**Hypothesis:** part of the observed classification error comes from ambiguity in the taxonomy and dataset labels rather than only from the model.
+
+**Improvement:** refine intent boundaries, add inclusion/exclusion rules, and perform a second annotation pass.
 
 ---
 
 ## 9. What Is Misleading About My Headline Number?
 
-The most misleading headline number is the **93.15% classification accuracy**.
+The most misleading number in this project is the **93.15% classification accuracy**.
 
-At first glance, this suggests that the classifier is highly reliable. However, that number is measured against the dataset-derived labels used for the held-out test split.
+It looks like the classifier is highly reliable. However, that result is measured against the labels used in the held-out dataset.
 
-When evaluated against the independently hand-labelled 152-example golden set, accuracy falls to **17.76%** and macro F1 falls to **0.1144**.
+When the same system is evaluated against an independently reviewed golden set, accuracy drops to **17.76%** and macro F1 drops to **0.1144**.
 
-This difference shows that high performance against existing dataset labels does not necessarily mean the system will perform reliably against a human-defined support taxonomy.
+This difference is important because it shows that:
 
-Therefore, the 93.15% result should be interpreted as:
+- strong performance against existing dataset labels does not guarantee reliable performance against a human-defined taxonomy;
+- some intent boundaries are ambiguous;
+- dataset label quality can have a major effect on reported model performance.
 
-> The simple classifier performs strongly against the existing dataset labels, but independent human evaluation reveals substantial risks around generalization, taxonomy boundaries, and label quality.
+Therefore, I would not present 93.15% as the overall reliability of the support agent.
 
-This is why the prototype should not be deployed for fully autonomous customer support based only on the headline classification accuracy.
+The more useful conclusion is:
 
----
+> **The simple classifier performs strongly against the existing dataset labels, but independent human evaluation reveals substantial risks in taxonomy quality, generalization, and intent ambiguity.**
 
-## 10. One-Week Next Steps
-
-If given one additional week, I would prioritize the following:
-
-### Days 1–2: Improve the taxonomy
-
-- review golden-set disagreements;
-- define clearer inclusion/exclusion rules;
-- adjudicate ambiguous examples;
-- expand the golden set toward 250 examples.
-
-### Day 3: Improve retrieval
-
-- use intent-aware retrieval;
-- retrieve multiple historical cases;
-- add stronger evidence filtering;
-- remove customer-specific information from historical responses.
-
-### Day 4: Improve response generation
-
-- generate a fresh response from retrieved evidence;
-- prevent unsupported claims;
-- separate retrieved evidence from generated wording.
-
-### Day 5: Improve evaluation
-
-- expand the human/LLM judge overlap set;
-- calibrate the LLM judge against human ratings;
-- add targeted evaluation for difficult intent boundaries.
-
-### Days 6–7: Safety and productization
-
-- improve confidence-based escalation;
-- add structured logging;
-- test on unseen conversations;
-- package the system for reproducible deployment.
+This is also why the prototype uses retrieval evidence and escalation rather than relying on classification confidence alone.
 
 ---
 
-## 11. Reply Quality Evaluation
+## 10. Reply Quality Evaluation
 
-A local Qwen2.5-0.5B-Instruct model was used as an LLM-as-judge.
+A local `Qwen2.5-0.5B-Instruct` model was used as an LLM-as-judge to evaluate generated support replies.
 
-Each response is evaluated on:
+Each response receives a score from 1 to 5 for:
 
-- Correctness
-- Groundedness
-- Relevance
-- Helpfulness
-- Tone
-- Overall quality
+- **Correctness** — does the response address the customer's actual issue?
+- **Groundedness** — is the response supported by the retrieved historical case?
+- **Relevance** — does the response stay focused on the customer's request?
+- **Helpfulness** — does it provide a useful next step?
+- **Tone** — is it appropriate for customer support?
+- **Overall quality** — overall quality of the response.
 
-Scores use a 1–5 scale.
+### Human comparison
 
-For an 8-example human overlap set:
+The LLM judge was compared with human ratings on an 8-example overlap set.
 
 - Exact agreement on overall score: **4/8 (50%)**
-- Agreement within ±1 point: **6/8 (75%)**
+- Agreement within one score point: **6/8 (75%)**
 
-The result suggests that the local judge can provide a useful supporting signal, but it should not be treated as ground truth. A larger human calibration set would be required for production-quality automated judging.
+The results suggest that the local judge is useful as a supporting evaluation signal, but it should not be treated as ground truth.
+
+A larger human-labelled calibration set would be needed before using the judge as an automated quality gate.
 
 ---
+
+## 11. One-Week Next Steps
+
+If I had one additional week, I would focus on the following improvements.
+
+### 1. Improve the intent taxonomy
+
+- Review all golden-set disagreements.
+- Define clear inclusion and exclusion rules for every intent.
+- Resolve ambiguous examples through annotation and adjudication.
+- Expand the golden set toward 250 examples.
+
+### 2. Improve retrieval
+
+- Restrict retrieval using the predicted intent.
+- Retrieve multiple candidate historical cases.
+- Add stronger relevance checks before using retrieved evidence.
+- Remove customer-specific information from historical responses.
+
+### 3. Improve response generation
+
+- Generate a fresh response from retrieved evidence instead of copying a historical reply.
+- Add checks for unsupported claims.
+- Separate retrieved evidence from generated text.
+
+### 4. Strengthen evaluation
+
+- Increase the human/LLM judge overlap set.
+- Calibrate the LLM judge against human ratings.
+- Add targeted tests for ambiguous intent boundaries.
+- Evaluate retrieval quality separately from response quality.
+
+### 5. Improve safe automation
+
+- Use confidence and retrieval quality together when deciding whether to automate.
+- Expand human escalation for uncertain cases.
+- Add structured logs for decisions, evidence, and failures.
+- Test on unseen conversations before considering production deployment.
+
+---
+
+## 12. Decision Log
+
+The project's detailed decision log is maintained separately in:
+
+`report/decision_log.md`
+
+It documents the 15 key design decisions made during development, including:
+
+- AmazonHelp brand selection
+- Eight-intent taxonomy
+- Majority and TF-IDF baselines
+- Independent golden-set evaluation
+- Sentence-embedding retrieval
+- FAISS indexing
+- Historical-response grounding
+- Similarity-based escalation
+- Human review for higher-risk intents
+- LLM-as-judge evaluation
+- Human-versus-LLM comparison
+- Reproducibility choices
+
+---
+
+## 13. Reproducibility
+
+### Install
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
